@@ -19,7 +19,9 @@ defmodule NextLS.LSPSupervisor do
       argv = apply(m, f, a)
 
       {opts, _, _invalid} =
-        OptionParser.parse(argv, strict: [version: :boolean, help: :boolean, stdio: :boolean, port: :integer])
+        OptionParser.parse(argv,
+          strict: [version: :boolean, help: :boolean, stdio: :boolean, port: :integer, host: :string]
+        )
 
       help_text = """
       Next LS v#{NextLS.version()}
@@ -36,6 +38,7 @@ defmodule NextLS.LSPSupervisor do
 
         --stdio             Use stdio as the transport mechanism
         --port <port>       Use TCP as the transport mechanism, with the given port
+        --host <host>       Bind TCP to the given host. Defaults to 127.0.0.1
         --help              Show help
         --version           Show nextls version
       """
@@ -60,8 +63,17 @@ defmodule NextLS.LSPSupervisor do
             []
 
           is_integer(opts[:port]) ->
-            IO.puts("Starting on port #{opts[:port]}")
-            [communication: {GenLSP.Communication.TCP, [port: opts[:port]]}]
+            host = Keyword.get(opts, :host, "127.0.0.1")
+
+            case :inet.parse_address(String.to_charlist(host)) do
+              {:ok, ip} ->
+                IO.puts("Starting on #{host}:#{opts[:port]}")
+                [communication: {NextLS.Communication.LocalTCP, [port: opts[:port], ip: ip]}]
+
+              {:error, _} ->
+                IO.puts("Invalid host: #{host}")
+                System.halt(1)
+            end
 
           true ->
             IO.puts(help_text)
